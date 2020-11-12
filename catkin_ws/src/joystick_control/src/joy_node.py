@@ -4,6 +4,7 @@ import math
 
 from sensor_msgs.msg import Joy
 from duckiepond.msg import MotorCmd,Heading
+from geometry_msgs.msg import Twist
 
 class JoyMapper(object):
     def __init__(self):
@@ -15,41 +16,76 @@ class JoyMapper(object):
 
         # Subscriptions
         self.sub_cmd_drive = rospy.Subscriber("cmd_drive",MotorCmd,self.cbCmd,queue_size=1)
-        self.sub_joy = rospy.Subscriber("joy", Joy, self.cbJoy, queue_size=1)
+        self.sub_joy = rospy.Subscriber("/os/joy", Joy, self.cbJoy, queue_size=1)
+        self.sub_keyboard = rospy.Subscriber("cmd_vel", Twist, self.cbkeyboard,queue_size=1)
 
         #varibles
         self.emergencyStop = False
         self.autoMode = False
+        self.keyboardmode = False
         self.motor_msg = MotorCmd()
+        self.motor_msg.right = 0
+        self.motor_msg.left = 0
+
+        #timer
+        self.timer = rospy.Timer(rospy.Duration(0.2),self.cb_publish)
+
+    def cb_publish(self,event):
+        if self.emergencyStop:
+            self.motor_msg.right = 0
+            self.motor_msg.left = 0
+        
+        self.pub_motor_cmd.publish(self.motor_msg)
 
     def cbCmd(self, cmd_msg):
-        if not self.emergencyStop and self.autoMode:
-	    self.motor_msg.right = max(min(cmd_msg.left*-1,1),-1)
-	    self.motor_msg.left = max(min(cmd_msg.right*-1,1),-1)
-            self.pub_motor_cmd.publish(self.motor_msg)
+        if not self.emergencyStop and self.autoMode and not self.keyboardmode:
+            self.motor_msg.right = max(min(cmd_msg.left,1),-1)
+            self.motor_msg.left = max(min(cmd_msg.right,1),-1)
+
+
+    def cbkeyboard (self, kb_msg):
+        if not self.emergencyStop and not self.autoMode and self.keyboardmode:
+            print(kb_msg.linear.x)
+            if kb_msg.linear.x==0 and kb_msg.angular.z==0:
+                motor_msg.right = 0
+                motor_msg.left = 0
+            elif(kb_msg.linear.x>0):
+                motor_msg.right = motor_msg.right+0.1
+                motor_msg.left = motor_msg.left+0.1
+            elif (kb_msg.linear.x <0):
+                motor_msg.left = motor_msg.left-0.1
+                motor_msg.left = motor_msg.left-0.1
+            elif (kb_msg.angular.z >0):
+                motor_msg.right = motor_msg.right+0.1
+                motor_msg.left = motor_msg.left+0.1        
+
+
 
     def cbJoy(self, joy_msg):
-        self.joy = joy_msg
         self.processButtons(joy_msg)
-        boat_heading_msg = Heading()
-        boat_heading_msg.speed = math.sqrt((math.pow(self.joy.axes[1],2)+math.pow(self.joy.axes[3],2))/2)
-        boat_heading_msg.phi = math.atan2(self.joy.axes[1],self.joy.axes[3])
-        mcd_msg = MotorCmd()
-        speed = boat_heading_msg.speed*math.sin(boat_heading_msg.phi)
-        difference = boat_heading_msg.speed*math.cos(boat_heading_msg.phi)
-        mcd_msg.left = max(min(speed - difference , 1),-1)
-        mcd_msg.right = max(min(speed + difference , 1),-1)
-        right = mcd_msg.right
-	mcd_msg.right = mcd_msg.left*-1
-	mcd_msg.left = right*-1
-	
-        if not self.emergencyStop and not self.autoMode:
-            self.pub_motor_cmd.publish(mcd_msg)
+        if not self.emergencyStop and not self.autoMode and not self.keyboardmode:
+            self.joy = joy_msg
+            boat_heading_msg = Heading()
+            boat_heading_msg.speed = math.sqrt((math.pow(self.joy.axes[1],2)+math.pow(self.joy.axes[3],2))/2)
+            boat_heading_msg.phi = math.atan2(self.joy.axes[1],self.joy.axes[3])
+            speed = boat_heading_msg.speed*math.sin(boat_heading_msg.phi)
+            difference = boat_heading_msg.speed*math.cos(boat_heading_msg.phi)
+            print("right")
+            self.motor_msg.right = max(min(speed - difference , 1),-1)
+            print(self.motor_msg.right)
+            self.motor_msg.left = max(min(speed + difference , 1),-1)
+            print("left")
+            print(self.motor_msg.left)
 
     def processButtons(self, joy_msg):
         # Button A
         if (joy_msg.buttons[0] == 1):
-            rospy.loginfo('A button')
+            #rospy.loginfo('A button')
+            self.keyboardmode = not self.keyboardmode
+            if self.keyboardmode:
+                rospy.loginfo('going keyboard control')
+            else:
+                rospy.loginfo('going joystick control')
             
         # Y button
         elif (joy_msg.buttons[3] == 1):
@@ -80,6 +116,8 @@ class JoyMapper(object):
             self.emergencyStop = not self.emergencyStop
             if self.emergencyStop:
                 rospy.loginfo('emergency stop activate')
+                self.motor_msg.right = 0
+                self.motor_msg.left = 0
             else:
                 rospy.loginfo('emergency stop release')
         # Left joystick button
@@ -91,8 +129,14 @@ class JoyMapper(object):
             if some_active:
                 rospy.loginfo('No binding for joy_msg.buttons = %s' % str(joy_msg.buttons))
 
+    def on_shutdown(self):
+        self.motor_msg.right = 0
+        self.motor_msg.left = 0
+        self.pub_motor_cmd.publish(self.motor_msg)
+        rospy.loginfo("shutting down [%s]" %(self.node_name))
 
 if __name__ == "__main__":
     rospy.init_node("joy_mapper",anonymous=False)
     joy_mapper = JoyMapper()
+    rospy.on_shutdown(joy_mapper.on_shutdown)
     rospy.spin()

@@ -42,19 +42,19 @@ class BoatHRVO(object):
         # setup publisher
         self.pub_v1 = rospy.Publisher("/boat1/cmd_vel", Twist, queue_size=1)
         self.sub_p3d1 = rospy.Subscriber(
-            "/boat1/p3d_odom", Odometry, self.cb_boat1_odom, queue_size=1)
+            "/boat1/localization_gps_imu/odometry", Odometry, self.cb_boat1_odom, queue_size=1)
 
         self.pub_v2 = rospy.Publisher("/boat2/cmd_vel", Twist, queue_size=1)
         self.sub_p3d1 = rospy.Subscriber(
-            "/boat2/p3d_odom", Odometry, self.cb_boat2_odom, queue_size=1)
+            "/boat2/localization_gps_imu/odometry", Odometry, self.cb_boat2_odom, queue_size=1)
 
         self.pub_v3 = rospy.Publisher("/boat3/cmd_vel", Twist, queue_size=1)
         self.sub_p3d1 = rospy.Subscriber(
-            "/boat3/p3d_odom", Odometry, self.cb_boat3_odom, queue_size=1)
+            "/boat3/localization_gps_imu/odometry", Odometry, self.cb_boat3_odom, queue_size=1)
 
         self.pub_v4 = rospy.Publisher("/boat4/cmd_vel", Twist, queue_size=1)
         self.sub_p3d1 = rospy.Subscriber(
-            "/boat4/p3d_odom", Odometry, self.cb_boat4_odom, queue_size=1)
+            "/boat4/localization_gps_imu/odometry", Odometry, self.cb_boat4_odom, queue_size=1)
 
         # initiallize boat status
         self.boat_odom = [Odometry() for i in range(4)]
